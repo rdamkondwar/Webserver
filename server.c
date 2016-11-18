@@ -18,6 +18,7 @@ int req_buffer_size;
 int count = 0;
 int producer_ptr = 0;
 int consumer_ptr = 0;
+pthread_cond_t cond_empty, cond_fill;
 
 typedef struct {
   pthread_t thread_id;
@@ -26,6 +27,7 @@ typedef struct {
 } thread_info;
 
 thread_info *tinfo;
+//TODO: Destroy mutex at end
 pthread_mutex_t mutex;
 
 void init_buffer(int buffer_size) {
@@ -42,10 +44,19 @@ void init_buffer(int buffer_size) {
     printf("\n mutex init failed\n");
     exit(1);
   }
+
+  if (pthread_cond_init(&cond_empty, NULL) != 0) {
+    printf("cond init failed\n");
+    exit(1);
+  }
+  if (pthread_cond_init(&cond_fill, NULL) != 0) {
+    printf("cond init failed\n");
+    exit(1);
+  }
 }
 
 void insert_into_buffer(int val) {
-  printf("debug: inserting %d into buffer idx %d\n", val, producer_ptr);
+  // printf("debug: inserting %d into buffer idx %d\n", val, producer_ptr);
   buffer[producer_ptr] = val;
   producer_ptr = (producer_ptr + 1) % req_buffer_size;
   count++;
@@ -53,19 +64,18 @@ void insert_into_buffer(int val) {
 
 void insert_new_req(int connfd) {
   pthread_mutex_lock(&mutex);
-  if (count <= req_buffer_size) {
-      insert_into_buffer(connfd);
+  while(count == req_buffer_size) {
+    pthread_cond_wait(&cond_empty, &mutex);
   }
-  else {
-    printf("Insert failed as buffer is full\n");
-  }
+  insert_into_buffer(connfd);
+  pthread_cond_signal(&cond_fill);    
   pthread_mutex_unlock(&mutex);
 }
 
 int get_req_from_buffer() {
   int val = -1;
   val = buffer[consumer_ptr];
-  printf("debug: consuming %d from buffer idx %d\n", val, consumer_ptr);
+  // printf("debug: consuming %d from buffer idx %d\n", val, consumer_ptr);
   buffer[consumer_ptr] = -1;
   consumer_ptr = (consumer_ptr + 1) % req_buffer_size;
   count--;
@@ -76,30 +86,31 @@ int get_req_from_buffer() {
 int get_new_req() {
   int val = -1;
   pthread_mutex_lock(&mutex);
-  if (count > 0) {
-      val = get_req_from_buffer();
+  while(count == 0) {
+    pthread_cond_wait(&cond_fill, &mutex);
   }
+  val = get_req_from_buffer();
+  pthread_cond_signal(&cond_empty);
   pthread_mutex_unlock(&mutex);
   return val;
 }
 
 void* thread_consumer_start(void *arg) {
   //Infinite loop
-  thread_info *tinfo = (thread_info *)arg;
+  // thread_info *tinfo = (thread_info *)arg;
   while(1) {
-    printf("in thread consumer %lu\n", tinfo->thread_id);
+    // printf("in thread consumer %lu\n", tinfo->thread_id);
     int connfd = get_new_req();
-    printf("Got new request %d\n", connfd);
+    // printf("Got new request %d\n", connfd);
     if (connfd > 0) {
       requestHandle(connfd);
       Close(connfd);
-      printf("Done request %d\n", connfd);
+      // printf("Done request %d\n", connfd);
     }
     else {
-      printf("No request found\n");
+       printf("No request found\n");
     }
-    
-    sleep(1);
+    // sleep(1);
   }
 }
 
@@ -128,12 +139,12 @@ void create_threads(int thread_count) {
 // CS537: Parse the new arguments too
 void getargs(int *port, int argc, char *argv[], int *buffer, int *threads) {
     if (argc != 4) {
-	fprintf(stderr, "Usage: %s <port> <buffer_size> <thread_cnt>\n", argv[0]);
+	fprintf(stderr, "Usage: %s <port> <threads_cnt> <buffer_size>\n", argv[0]);
 	exit(1);
     }
     *port = atoi(argv[1]);
-    *buffer = atoi(argv[2]);
-    *threads = atoi(argv[3]);
+    *threads = atoi(argv[2]);
+    *buffer = atoi(argv[3]);
 }
 
 int main(int argc, char *argv[]) {
