@@ -31,7 +31,7 @@ thread_info *tinfo;
 pthread_mutex_t mutex;
 
 void init_buffer(int buffer_size) {
-  printf("debug: Init Buffer with size %d\n", buffer_size);
+  // printf("debug: Init Buffer with size %d\n", buffer_size);
   req_buffer_size = buffer_size;
   int i = 0;
   buffer = (int *) malloc(buffer_size * sizeof(int));
@@ -116,7 +116,7 @@ void* thread_consumer_start(void *arg) {
 
 void create_threads(int thread_count) {
   int i, ret;
-  printf("debug: Creating threads %d\n", thread_count);
+  // printf("debug: Creating threads %d\n", thread_count);
   tinfo = calloc(thread_count, sizeof(thread_info));
   if (tinfo == NULL) {
       //handle exit
@@ -136,15 +136,54 @@ void create_threads(int thread_count) {
   }
 }
 
+int getArgValue(char *p) {
+  int len = strlen(p);
+  int i;
+  for (i = 0 ; i < len; i++) {
+    if (!isdigit(p[i])) {
+      return -1;
+    }
+  }
+  return atoi(p);
+}
+
 // CS537: Parse the new arguments too
 void getargs(int *port, int argc, char *argv[], int *buffer, int *threads) {
     if (argc != 4) {
-	fprintf(stderr, "Usage: %s <port> <threads_cnt> <buffer_size>\n", argv[0]);
+	fprintf(stderr, "Usage: %s <portnum> <threads_cnt> <buffer_size>\n", argv[0]);
 	exit(1);
     }
-    *port = atoi(argv[1]);
-    *threads = atoi(argv[2]);
-    *buffer = atoi(argv[3]);
+    /* if(isInteger(argv[1])) { */
+    /*   *port = atoi(argv[1]); */
+    /* } */
+
+    /* if(isInteger(argv[2])) { */
+    /*   *threads = atoi(argv[2]); */
+    /* } */
+
+    /* if(isInteger(argv[3])) { */
+    /*   *buffer = atoi(argv[3]); */
+    /* } */
+
+    *port = getArgValue(argv[1]);
+    *threads = getArgValue(argv[2]);
+    *buffer = getArgValue(argv[3]);
+
+    if (*port <= 0) {
+      fprintf(stderr, "Error: Argument portnum %s must be positive integer\n", argv[1]);
+      exit(1);
+    }
+    if (*threads <= 0) {
+      fprintf(stderr, "Error: Argument threads %s must be positive integer\n", argv[2]);
+      exit(1);
+    }
+    if (*buffer <= 0) {
+      fprintf(stderr, "Error: Argument buffers %s must be positive integer\n", argv[3]);
+      exit(1);
+    }
+    // *threads = atoi(argv[2]);
+    // *buffer = atoi(argv[3]);
+    // printf("debug: port=%d threads=%d buffers=%d\n", *port, *threads, *buffer);
 }
 
 int main(int argc, char *argv[]) {
